@@ -1,139 +1,137 @@
-# Embeddings Integrity
+# Embedding Integrity & Fail-Fast Security for LLMs
 
-A Python project for ensuring the integrity and security of word embeddings in machine learning models. This toolkit provides mechanisms to detect tampering, maintain audit logs, and verify the authenticity of embedding vectors.
+This project explores **parameter-level security in Large Language Models (LLMs)** by detecting and blocking silent tampering of embedding matrices using **cryptographic integrity verification, audit logging, and fail-fast enforcement**.
 
-## Features
+Most GenAI systems focus on prompts, RAG, or fine-tuning.  
+This project instead asks a lower-level but critical question:
 
-- **Secure Embedding Storage**: Store embeddings using SafeTensors format for secure serialization
-- **Integrity Verification**: Hash-based verification to detect unauthorized modifications
-- **Audit Logging**: Track integrity violations and security events
-- **Tamper Detection**: Demonstrate and detect embedding tampering attacks
-- **Versioned Storage**: Timestamp-based versioning for embedding files
+> **How do we ensure that LLM embeddings have not been silently modified before a model is deployed or loaded?**
 
-## Project Structure
+---
 
-```
+## 🚨 Problem Statement
+
+Embedding matrices are the first learned parameters in an LLM.  
+Even a small, targeted modification to a single token embedding can subtly alter model behavior.
+
+While embeddings are typically stored in cloud-based artifact stores, **storage security alone does not guarantee parameter integrity**.  
+Without explicit verification, silent embedding tampering can go undetected.
+
+---
+
+## 🎯 Project Goal
+
+To design a **simple, explainable, and production-oriented mechanism** that:
+
+- Treats base embeddings as **immutable trusted artifacts**
+- Detects **single-token embedding tampering**
+- Identifies **exactly which token was modified**
+- Logs violations for audit and forensics
+- Prevents corrupted embeddings from being used (**fail-fast**)
+
+---
+
+## 🧠 High-Level Design
+Trusted Base Embeddings
+↓
+Cryptographic Hash Registration
+↓
+Candidate Embedding Artifact
+↓
+Token-Level Integrity Verification
+↓
+Audit Logging + Fail-Fast Blocking
+
+
+Integrity checks are performed **at model load or deployment time**, not during inference.
+
+---
+
+## 🧱 Project Structure
+
 embeddings-integrity/
-├── README.md
-├── requirements.txt
-├── data/
-│   └── vocab.txt
+│
 ├── embeddings/
-│   ├── __init__.py
-│   ├── embedding_store.py    # Core embedding management
-│   ├── integrity.py          # Integrity verification system
-│   └── audit.py              # Audit logging functionality
+│ ├── embedding_store.py # Embedding creation, load, save, update
+│ ├── integrity.py # Hash-based integrity verification
+│ ├── audit.py # Audit logging for violations
+│ └── init.py
+│
 ├── experiments/
-│   └── tamper_demo.py        # Demonstration of tamper detection
-├── model/
-│   └── simple_lm.py          # Placeholder for language model integration
-└── utils/
-    └── hashing.py            # SHA256 hashing utilities
-```
+│ ├── tamper_demo.py # Simulates single-token embedding tampering
+│ ├── integrity_check_demo.py # Verifies integrity and enforces fail-fast
+│ └── init.py
+│
+├── README.md
+├── .gitignore
+└── requirements.txt
 
-## Installation
 
-1. **Clone the repository** (if applicable) or navigate to the project directory.
+---
 
-2. **Create a virtual environment**:
-   ```bash
-   python -m venv myenv
-   ```
+## ⚙️ How It Works (Step-by-Step)
 
-3. **Activate the virtual environment**:
-   - On Windows:
-     ```bash
-     myenv\Scripts\activate
-     ```
-   - On macOS/Linux:
-     ```bash
-     source myenv/bin/activate
-     ```
+### 1️⃣ Base Embedding Creation
+- A custom embedding matrix is created for a fixed vocabulary
+- The base embedding artifact is treated as **immutable**
+- Stored using `safetensors` for safety and consistency
 
-4. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 2️⃣ Tampering Simulation
+- A single token embedding (e.g., `"python"`) is modified
+- All other embeddings remain unchanged
+- A **new, versioned artifact** is created instead of overwriting the base
 
-## Usage
+### 3️⃣ Integrity Registration
+- Cryptographic hashes (SHA-256) are computed **per token embedding**
+- These hashes represent the **trusted reference**
 
-### Running the Tamper Demo
+### 4️⃣ Integrity Verification
+- Before loading embeddings, hashes are recomputed
+- Token-level comparison detects even single-value changes
+- Exact tampered tokens are identified
 
-The `tamper_demo.py` script demonstrates how to create embeddings, tamper with them, and measure the impact:
+### 5️⃣ Audit & Fail-Fast Enforcement
+- Any integrity violation is logged with timestamp and token name
+- Execution is aborted immediately to prevent unsafe usage
 
-```bash
-python experiments/tamper_demo.py
-```
+---
 
-This will:
-- Create or load base embeddings
-- Tamper with a specific token's embedding vector
-- Save the tampered embeddings with a timestamp
-- Calculate and display the L2 distance between original and tampered vectors
+## 🔐 Why Cryptographic Hashing?
 
-### Using the Embedding Store
+- Detects even **single-bit changes**
+- Fixed-size fingerprints (secure and efficient)
+- Token-level granularity enables forensic analysis
+- Independent of model architecture
 
-```python
-from embeddings.embedding_store import EmbeddingStore
+Hashing is performed **once per artifact lifecycle**, not during inference.
 
-# Define vocabulary
-vocab = {"python": 0, "java": 1, "ai": 2}
+---
 
-# Create and initialize store
-store = EmbeddingStore(vocab=vocab, dim=32)
-store.initialize()
+## 📊 Example Audit Log
 
-# Save embeddings
-store.save("embeddings/my_embeddings.safetensors")
+```json
+{
+  "timestamp": "2026-01-04 16:25:12",
+  "embedding_file": "tampered_embeddings_1767543240.safetensors",
+  "violated_tokens": ["python"]
+}
 
-# Load embeddings
-loaded_store = EmbeddingStore.load("embeddings/my_embeddings.safetensors")
-```
+How to Run
+Clean previous artifacts
+del embeddings/base_embeddings.safetensors
+del embeddings/tampered_embeddings_*.safetensors
+del embeddings/audit_log.json
 
-### Integrity Verification
+Run tampering demo
+python -m experiments.tamper_demo
 
-```python
-from embeddings.integrity import EmbeddingIntegrityRegistry
+Run integrity verification
+python -m experiments.integrity_check_demo
 
-# Register trusted embeddings
-registry = EmbeddingIntegrityRegistry()
-registry.register(store.embedding.weight)
 
-# Verify integrity
-results = registry.verify(store.embedding.weight)
-print(results)  # {token_id: True/False}
-```
 
-### Audit Logging
+📌 Disclaimer
 
-```python
-from embeddings.audit import AuditLogger
+This project is an educational and exploratory implementation designed to illustrate integrity concepts.
+Large-scale production systems may use optimizations such as chunk-based hashing, Merkle trees, or signed manifests.
 
-logger = AuditLogger()
-logger.log_integrity_violation(tampered_tokens, vocab, "embeddings/file.safetensors")
-```
-
-## Dependencies
-
-- `torch`: PyTorch for tensor operations and embeddings
-- `numpy`: Numerical computing
-- `safetensors`: Secure tensor serialization
-
-## Security Considerations
-
-- Embeddings are stored in SafeTensors format for security
-- SHA256 hashing is used for integrity verification
-- Audit logs track all integrity violations
-- Versioned files prevent accidental overwrites
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and ensure integrity checks pass
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
