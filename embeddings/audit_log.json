@@ -1,0 +1,9 @@
+[
+  {
+    "timestamp": "2026-01-05 14:32:09",
+    "embedding_file": "embeddings\\tampered_embeddings_1767623478.safetensors",
+    "violated_tokens": [
+      "python"
+    ]
+  }
+]
