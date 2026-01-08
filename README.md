@@ -49,6 +49,7 @@ Integrity checks are performed **at model load or deployment time**, not during 
 
 ## 🧱 Project Structure
 
+```
 embeddings-integrity/
 │
 ├── embeddings/
@@ -65,7 +66,7 @@ embeddings-integrity/
 ├── README.md
 ├── .gitignore
 └── requirements.txt
-
+```
 
 ---
 
@@ -115,23 +116,33 @@ Hashing is performed **once per artifact lifecycle**, not during inference.
   "embedding_file": "tampered_embeddings_1767543240.safetensors",
   "violated_tokens": ["python"]
 }
+```
 
-How to Run
-Clean previous artifacts
-del embeddings/base_embeddings.safetensors
-del embeddings/tampered_embeddings_*.safetensors
-del embeddings/audit_log.json
+---
 
-Run tampering demo
+## How to Run
+
+**Clean previous artifacts**
+
+```bash
+rm embeddings/base_embeddings.safetensors
+rm embeddings/tampered_embeddings_*.safetensors
+rm embeddings/audit_log.json
+```
+
+**Run tampering demo**
+
+```bash
 python -m experiments.tamper_demo
+```
 
-Run integrity verification
+**Run integrity verification**
+
+```bash
 python -m experiments.integrity_check_demo
+```
 
 
 
-📌 Disclaimer
 
-This project is an educational and exploratory implementation designed to illustrate integrity concepts.
-Large-scale production systems may use optimizations such as chunk-based hashing, Merkle trees, or signed manifests.
 
